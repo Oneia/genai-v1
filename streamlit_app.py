@@ -97,8 +97,7 @@ class ValueRiskInsight(BaseModel):
     component_breakdown: ComponentBreakdown
     rationale: str = Field(..., description="<= 45-word natural-language justification of the score.")
 
-# Initialize models and services
-@st.cache_resource
+
 def initialize_services():
     """Initialize the AI models and services."""
     try:
@@ -113,8 +112,7 @@ def initialize_services():
         st.error(f"Error initializing services: {str(e)}")
         return None, None
 
-# Initialize agents
-@st.cache_resource
+
 def initialize_agents(model):
     """Initialize the analysis agents."""
     if not model:
