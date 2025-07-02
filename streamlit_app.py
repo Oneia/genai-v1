@@ -239,8 +239,7 @@ def initialize_agents(model):
     
     return reddit_sentiment_agent, value_risk_agent, summarize_agent
 
-# Get Reddit data
-@st.cache_data(ttl=3600)  # Cache for 1 hour
+
 def get_reddit_data(reddit_service, subreddits):
     """Fetch Reddit data from specified subreddits."""
     if not reddit_service:
