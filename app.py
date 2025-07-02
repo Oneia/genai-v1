@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Trading LLM Analysis - Streamlit Application
 A comprehensive trading analysis tool that combines Reddit sentiment with financial fundamentals.
@@ -110,8 +111,12 @@ def initialize_services():
     except Exception as e:
         st.error(f"Error initializing services: {str(e)}")
         return None, None
+class FinancialAnalysisResult(BaseModel):
+    """Collection of financial analysis results."""
+    results: List[ValueRiskInsight] = Field(..., description="List of financial analysis insights for all analyzed tickers.")
+    window: str = Field(default="last_24h", description="Time window for the analysis.")
 
-# Initialize agents
+
 def initialize_agents(model):
     """Initialize the analysis agents."""
     if not model:
@@ -176,30 +181,9 @@ def initialize_agents(model):
         3. sentiment_raw = Σ(weighted pillar scores), clamp –1…+1.
         4. confidence = 0.1 + 0.9*abs(sentiment).
         5. rationale = one sentence (≤45 words) citing strongest + & – pillars.
-
-        OUTPUT (JSON ONLY):
-        {
-          "results": [
-            {
-              "symbol": "NVDA",
-              "sentiment": 0.63,
-              "confidence": 0.67,
-              "component_breakdown": {
-                "valuation": -0.2,
-                "growth": 0.3,
-                "profitability": 0.2,
-                "leverage": 0.1,
-                "cash_flow": 0.15,
-                "shareholder_return": 0.05,
-                "red_flag": 0
-              },
-              "rationale": "Strong EPS growth and margins offset premium valuation; low leverage supports bullish view."
-            }
-          ],
-          "window": "last_24h"
-        }
-        """),
+     """),  # Add this line
         use_json_mode=True,
+        response_model=FinancialAnalysisResult,
     )
     
     # Summarize agent
@@ -236,16 +220,17 @@ def initialize_agents(model):
     
     return reddit_sentiment_agent, value_risk_agent, summarize_agent
 
-def get_reddit_data(_reddit_service, subreddits):
+
+def get_reddit_data(reddit_service, subreddits):
     """Fetch Reddit data from specified subreddits."""
-    if not _reddit_service:
+    if not reddit_service:
         return []
     
     reddit_data = []
     with st.spinner("Fetching Reddit data..."):
         for subreddit in subreddits:
             try:
-                posts = _reddit_service.get_posts_with_top_comments(subreddit, 10)
+                posts = reddit_service.get_posts_with_top_comments(subreddit, 10)
                 reddit_data.extend(posts)
             except Exception as e:
                 st.warning(f"Error fetching data from r/{subreddit}: {str(e)}")
@@ -271,13 +256,6 @@ def main():
     # Sidebar configuration
     st.sidebar.title("🔧 Configuration")
     
-    # Input method selection
-    input_method = st.sidebar.selectbox(
-        "Input Method",
-        ["Text Input", "Stock List", "Sector Analysis"],
-        help="Choose how you want to input your analysis request"
-    )
-    
     # Subreddits selection
     default_subreddits = [
         "wallstreetbets", "stocks", "investing", "StockMarket",
@@ -293,54 +271,23 @@ def main():
         help="Choose which subreddits to analyze for sentiment"
     )
     
-    # Main content area
-    if input_method == "Text Input":
-        st.subheader("📝 Free Text Analysis")
-        user_input = st.text_area(
-            "Enter your analysis request",
-            placeholder="e.g., 'NVDA AMD semiconductors' or 'ai sector' or 'cars in europe sector'",
-            height=100
-        )
-        
-        if st.button("🚀 Analyze", type="primary"):
-            if user_input.strip():
-                analyze_request(user_input, selected_subreddits, reddit_service, 
-                              reddit_sentiment_agent, value_risk_agent, summarize_agent)
-            else:
-                st.warning("Please enter a valid analysis request.")
+    # Main content area - Stock List Analysis only
+    st.subheader("📋 Stock Analysis")
+    stock_input = st.text_area(
+        "Enter stock symbols (one per line or comma-separated)",
+        placeholder="NVDA\nAMD\nTSLA\nAAPL\nMSFT",
+        height=150
+    )
     
-    elif input_method == "Stock List":
-        st.subheader("📋 Stock List Analysis")
-        stock_input = st.text_area(
-            "Enter stock symbols (one per line or comma-separated)",
-            placeholder="NVDA\nAMD\nTSLA\nAAPL\nMSFT",
-            height=150
-        )
-        
-        if st.button("🚀 Analyze Stocks", type="primary"):
-            if stock_input.strip():
-                # Convert to comma-separated format
-                stocks = [s.strip() for s in stock_input.replace('\n', ',').split(',') if s.strip()]
-                user_input = ' '.join(stocks)
-                analyze_request(user_input, selected_subreddits, reddit_service,
-                              reddit_sentiment_agent, value_risk_agent, summarize_agent)
-            else:
-                st.warning("Please enter at least one stock symbol.")
-    
-    elif input_method == "Sector Analysis":
-        st.subheader("🏭 Sector Analysis")
-        sector_input = st.text_input(
-            "Enter sector or industry",
-            placeholder="e.g., semiconductors, ai, healthcare, banking"
-        )
-        
-        if st.button("🚀 Analyze Sector", type="primary"):
-            if sector_input.strip():
-                user_input = f"{sector_input} sector"
-                analyze_request(user_input, selected_subreddits, reddit_service,
-                              reddit_sentiment_agent, value_risk_agent, summarize_agent)
-            else:
-                st.warning("Please enter a sector name.")
+    if st.button("🚀 Analyze Stocks", type="primary"):
+        if stock_input.strip():
+            # Convert to comma-separated format
+            stocks = [s.strip() for s in stock_input.replace('\n', ',').split(',') if s.strip()]
+            user_input = ' '.join(stocks)
+            analyze_request(user_input, selected_subreddits, reddit_service,
+                          reddit_sentiment_agent, value_risk_agent, summarize_agent)
+        else:
+            st.warning("Please enter at least one stock symbol.")
     
     # Display usage instructions
     with st.expander("ℹ️ How to use this app"):
@@ -350,11 +297,6 @@ def main():
         This app combines **social sentiment analysis** from Reddit with **fundamental financial analysis** 
         to provide comprehensive trading insights.
         
-        #### 🎯 Input Methods:
-        1. **Text Input**: Free-form text describing stocks or sectors
-        2. **Stock List**: Direct list of stock symbols
-        3. **Sector Analysis**: Focus on specific industry sectors
-        
         #### 📈 Analysis Components:
         - **Reddit Sentiment**: Social media sentiment from selected subreddits
         - **Financial Fundamentals**: Valuation, growth, profitability metrics
@@ -362,14 +304,13 @@ def main():
         
         #### 🔧 Configuration:
         - Select relevant subreddits for sentiment analysis
-        - Choose your preferred input method
+        - Enter stock symbols to analyze
         - Get comprehensive trading insights with position sizing
         
-        #### 💡 Example Inputs:
-        - `NVDA AMD semiconductors`
-        - `ai sector`
-        - `cars in europe sector`
-        - `TSLA AAPL MSFT`
+        #### 💡 Example Stock Inputs:
+        - `NVDA AMD INTC` (semiconductor stocks)
+        - `TSLA AAPL MSFT GOOGL` (tech giants)
+        - `JPM BAC WFC` (banking sector)
         """)
 
 def analyze_request(user_input, selected_subreddits, reddit_service, 
@@ -385,7 +326,7 @@ def analyze_request(user_input, selected_subreddits, reddit_service,
         status_text.text("Step 1/4: Fetching Reddit data...")
         progress_bar.progress(25)
         
-        reddit_data = get_reddit_data(_reddit_service=reddit_service, subreddits=selected_subreddits)
+        reddit_data = get_reddit_data(reddit_service, selected_subreddits)
         
         if not reddit_data:
             st.warning("No Reddit data available. Proceeding with financial analysis only.")
@@ -638,4 +579,4 @@ def display_financial_table(results_data):
     )
 
 if __name__ == "__main__":
-    main()
+    main() 
